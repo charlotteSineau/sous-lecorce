@@ -95,13 +95,13 @@ body {
 .pricing-wrapper {
 margin : 0 auto;
 display: flex; 
+gap: 50px;
 justify-content: space-around;
 }
 
 .pricing-card {
   background-color: #f7f1de;
   flex-direction: column;
-  max-width: 40%;
   align-items: center;
   padding: 32px 24px;
   display: flex;
@@ -585,9 +585,9 @@ width: 80%; /* Largeur de 80% de la page */
 .formats {
   width: 85%;
   margin: 0 auto; 
-  margin-top: 10%;
+  margin-top: 20%;
   font-size: 25px;
-  text-align: justify;
+  line-height: 40px;
 }
 /* Contrôles format & ajout sur chaque photo */
       .bloc-img {
@@ -1576,17 +1576,30 @@ max-height: 600px;
 }
 
 @media screen and (max-width: 767px) {
-  .stages {
-    padding: 60px 15px;
+
+  .section-docu {
+    display: flex;
+    flex-direction: column;
   }
 
+  .section-docu img {
+    width: 100%;
+  }
+
+  .synopsis {
+    padding: 20px;
+  }
+.container {
+width: 100%;
+ }
+
   .pricing-wrapper {
+    display: flex;
+    gap: 20px;
+    flex-direction: column;
     justify-items: stretch;
   }
 
-  .pricing-card {
-    width: auto;
-  }
 
   .pricing-title {
     font-size: 34px;
