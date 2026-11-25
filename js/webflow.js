@@ -16,7 +16,7 @@
 /*fx paypal*/
 (function () {
   const FORMATS_PAR_DEFAUT = [
-   { label: "Carte postale", prix: 0.5 },
+   { label: "Carte postale", prix: 0,5 },
    { label: "Tirage 20 × 30 cm", prix: 40 },
    { label: "Tirage 30 × 45 cm", prix: 65 },
    { label: "Tirage 40 × 65 cm", prix:  95 },
