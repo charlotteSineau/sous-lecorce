@@ -16,17 +16,36 @@
 /*fx paypal*/
 (function () {
   const FORMATS_PAR_DEFAUT = [
-   { label: "Carte postale", prix: 1 },
-   { label: "Tirage 20 × 30 cm", prix: 40 },
-   { label: "Tirage 30 × 45 cm", prix: 65 },
-   { label: "Tirage 40 × 65 cm", prix:  95 },
-
+    { label: "Carte postale", prix: 1 },
+    { label: "Tirage 20 × 30 cm", prix: 40 },
+    { label: "Tirage 30 × 45 cm", prix: 65 },
+    { label: "Tirage 40 × 65 cm", prix: 95 }
   ];
 
-  // Optionnel : personnaliser un titre ou des formats par data-photo-id
   const CONFIG_PAR_PHOTO = {};
+  const STORAGE_KEY = "charlotte_photo_cart";
 
-  let cart = JSON.parse(localStorage.getItem("charlotte_photo_cart")) || [];
+  let cart = [];
+  try {
+    cart = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  } catch (e) {
+    console.warn("Panier localStorage illisible, réinitialisation :", e);
+    cart = [];
+  }
+
+  let paypalRendered = false;
+
+  function round2(num) {
+    return Number(Number(num || 0).toFixed(2));
+  }
+
+  function escapeAttr(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
 
   function extraireNomFichier(src) {
     if (!src) return "";
@@ -47,7 +66,7 @@
 
       const customConfig = CONFIG_PAR_PHOTO[photoId] || {};
       const nomFichier = extraireNomFichier(imgSrc);
-      const titre = customConfig.titre || nomFichier || bloc.dataset.photoTitle || "";
+      const titre = customConfig.titre || nomFichier || bloc.dataset.photoTitle || `Photo ${idx + 1}`;
       const formats = customConfig.formats || FORMATS_PAR_DEFAUT;
 
       const oldTrigger = bloc.querySelector(".button-trigger");
@@ -66,11 +85,10 @@
       formats.forEach((f, fIdx) => {
         const opt = document.createElement("option");
         opt.value = String(fIdx);
-        opt.textContent = `${f.label} — ${f.prix} €`;
+        opt.textContent = `${f.label} — ${round2(f.prix)} €`;
         selectEl.appendChild(opt);
       });
 
-      // Changement d'image à la sélection d'un format
       selectEl.addEventListener("change", () => {
         const chosenFormat = formats[Number(selectEl.value)] || formats[0];
         if (chosenFormat && chosenFormat.image) {
@@ -99,7 +117,7 @@
           photoId,
           titre,
           format: chosenFormat.label,
-          prix: Number(chosenFormat.prix),
+          prix: round2(chosenFormat.prix),
           image: chosenFormat.image || activeImgSrc,
           qte: 1
         });
@@ -150,43 +168,62 @@
     saveAndRenderCart();
   };
 
+  function computeCartTotals() {
+    let total = 0;
+    const normalizedItems = cart.map((item) => {
+      const unitPrice = round2(item.prix);
+      const qty = Math.max(1, parseInt(item.qte, 10) || 1);
+      const lineTotal = round2(unitPrice * qty);
+      total = round2(total + lineTotal);
+      return {
+        ...item,
+        prix: unitPrice,
+        qte: qty,
+        lineTotal
+      };
+    });
+    return { items: normalizedItems, total };
+  }
+
   function saveAndRenderCart() {
-    localStorage.setItem("charlotte_photo_cart", JSON.stringify(cart));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
 
     const badge = document.getElementById("cart-count-badge");
     const container = document.getElementById("cart-items-container");
     const footer = document.getElementById("cart-footer");
     const totalEl = document.getElementById("cart-total-value");
+    const paypalContainer = document.getElementById("paypal-button-container");
     if (!badge || !container || !footer || !totalEl) return;
 
-    const totalQty = cart.reduce((sum, item) => sum + item.qte, 0);
+    const totalQty = cart.reduce((sum, item) => sum + (parseInt(item.qte, 10) || 0), 0);
     badge.textContent = String(totalQty);
 
     if (cart.length === 0) {
       container.innerHTML =
         '<p class="cart-empty">Votre panier est vide. Sélectionnez une photo et un format pour commencer.</p>';
       footer.style.display = "none";
+      if (paypalContainer) paypalContainer.style.display = "none";
       return;
     }
 
     footer.style.display = "block";
-    let totalAmount = 0;
+    if (paypalContainer) paypalContainer.style.display = "block";
 
-    container.innerHTML = cart
+    const { items, total } = computeCartTotals();
+
+    container.innerHTML = items
       .map((item, idx) => {
-        const lineTotal = item.prix * item.qte;
-        totalAmount += lineTotal;
         return `
           <div class="cart-item">
-            <img src="${item.image}" alt="${item.titre}">
+            <img src="${escapeAttr(item.image)}" alt="${escapeAttr(item.titre)}">
             <div class="cart-item-info">
-              <div><strong>${item.titre}</strong></div>
-              <div class="cart-item-format">${item.format}</div>
+              <div><strong>${escapeAttr(item.titre)}</strong></div>
+              <div class="cart-item-format">${escapeAttr(item.format)}</div>
               <div class="cart-item-actions">
                 <button type="button" class="cart-qte-btn" onclick="updateQty(${idx}, -1)">-</button>
                 <span>${item.qte}</span>
                 <button type="button" class="cart-qte-btn" onclick="updateQty(${idx}, 1)">+</button>
-                <strong style="margin-left: 6px;">${lineTotal.toFixed(2)} €</strong>
+                <strong style="margin-left: 6px;">${item.lineTotal.toFixed(2)} €</strong>
                 <button type="button" class="cart-remove-btn" onclick="removeItem(${idx})">Retirer</button>
               </div>
             </div>
@@ -195,18 +232,38 @@
       })
       .join("");
 
-    totalEl.textContent = totalAmount.toFixed(2);
+    totalEl.textContent = total.toFixed(2);
+    tryInitPayPalButton();
   }
 
-  function initPayPalButton() {
+  function tryInitPayPalButton(retries = 20) {
+    if (paypalRendered) return;
     const container = document.getElementById("paypal-button-container");
-    if (!container || typeof window.paypal === "undefined") return;
+    if (!container) return;
+
+    if (typeof window.paypal === "undefined" || !window.paypal.Buttons) {
+      if (retries > 0) {
+        setTimeout(() => tryInitPayPalButton(retries - 1), 250);
+      } else {
+        console.error("SDK PayPal introuvable : vérifiez la balise <script src='https://www.paypal.com/sdk/js?...'>");
+      }
+      return;
+    }
+
+    paypalRendered = true;
+    container.innerHTML = "";
 
     window.paypal
       .Buttons({
         createOrder: function (data, actions) {
-          const total = document.getElementById("cart-total-value").textContent;
-          const items = cart.map((item) => ({
+          const { items, total } = computeCartTotals();
+          if (items.length === 0 || total <= 0) {
+            alert("Votre panier est vide.");
+            return Promise.reject(new Error("Panier vide"));
+          }
+
+          const totalStr = total.toFixed(2);
+          const paypalItems = items.map((item) => ({
             name: `${item.titre} - ${item.format}`.slice(0, 127),
             unit_amount: {
               currency_code: "EUR",
@@ -221,25 +278,36 @@
                 description: "Commande tirages photographiques",
                 amount: {
                   currency_code: "EUR",
-                  value: total,
+                  value: totalStr,
                   breakdown: {
                     item_total: {
                       currency_code: "EUR",
-                      value: total
+                      value: totalStr
                     }
                   }
                 },
-                items
+                items: paypalItems
               }
             ]
           });
         },
         onApprove: function (data, actions) {
           return actions.order.capture().then(function (details) {
-            alert(`Merci ${details.payer.name.given_name}, votre commande a bien été réglée.`);
+            const payerName =
+              details && details.payer && details.payer.name && details.payer.name.given_name
+                ? details.payer.name.given_name
+                : "client";
+            alert(`Merci ${payerName}, votre commande a bien été réglée.`);
             window.clearCart();
             window.toggleCart(false);
           });
+        },
+        onCancel: function () {
+          console.log("Paiement PayPal annulé par l'utilisateur.");
+        },
+        onError: function (err) {
+          console.error("Erreur PayPal Buttons :", err);
+          alert("Une erreur est survenue lors de l'initialisation ou du traitement du paiement PayPal.");
         }
       })
       .render("#paypal-button-container");
@@ -248,13 +316,12 @@
   function boot() {
     initPhotoShopControls();
     saveAndRenderCart();
-    initPayPalButton();
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(boot, 100));
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    setTimeout(boot, 100);
+    boot();
   }
 })();
 
