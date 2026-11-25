@@ -682,20 +682,19 @@ width: 80%; /* Largeur de 80% de la page */
 }
 
 .cart-drawer {
-  position: fixed;
+position: fixed;
   top: 0;
   right: -420px;
   width: 100%;
   max-width: 420px;
-  height: 100vh;
-  max-height: 100dvh;
+  height: 100dvh;
   background: #ffffff;
   color: #111111;
   z-index: 1000;
   box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
-  display: flex;
-  flex-direction: column;
+  display: block; /* Important : plus de flex qui bloque le scroll du footer */
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   transition: right 0.28s ease;
 }
@@ -705,12 +704,15 @@ width: 80%; /* Largeur de 80% de la page */
 }
 
 .cart-header {
+osition: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
   padding: 20px;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-shrink: 0;
 }
 
 .cart-header h3 {
@@ -728,11 +730,8 @@ width: 80%; /* Largeur de 80% de la page */
 }
 
 .cart-body {
-  padding: 20px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  flex: 1 1 auto;
-  min-height: 0;
+padding: 20px;
+  overflow: visible;
 }
 
 .cart-empty {
@@ -747,6 +746,11 @@ width: 80%; /* Largeur de 80% de la page */
   padding-bottom: 14px;
   margin-bottom: 14px;
   border-bottom: 1px solid #f1f5f9;
+}
+
+#paypal-button-container {
+  width: 100%;
+  min-height: 150px;
 }
 
 .cart-item img {
@@ -794,10 +798,9 @@ width: 80%; /* Largeur de 80% de la page */
 }
 
 .cart-footer {
-  padding: 20px;
+  padding: 20px 20px 60px 20px; /* Marge en bas pour bien voir le bouton Payer */
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
-  flex-shrink: 0;
 }
 
 .cart-total-line {
